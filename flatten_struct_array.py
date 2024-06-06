@@ -19,24 +19,21 @@ def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_'
         for field in schema.fields:
             name = field.name
             dtype = field.dataType
-            if prefix:
-                new_name = f"{prefix}{separator}{name}" if include_parents else name
-            else:
-                new_name = name
+            new_name = f"{prefix}{separator}{name}" if prefix else name
 
             if isinstance(dtype, StructType):
                 fields += flatten(dtype, prefix=new_name)
             elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                fields.append(col(f"{prefix}.{name}").alias(new_name))
-                fields.append(explode(col(f"{prefix}.{name}")).alias(f"{new_name}_exploded"))
+                fields.append(col(f"{prefix}.{name}" if prefix else name).alias(new_name))
+                fields.append(explode(col(f"{prefix}.{name}" if prefix else name)).alias(f"{new_name}_exploded"))
             else:
-                fields.append(col(f"{prefix}.{name}").alias(new_name))
+                fields.append(col(f"{prefix}.{name}" if prefix else name).alias(new_name))
         return fields
 
     def flatten_df_recursively(df, prefix=None):
         schema = df.schema
         columns = flatten(schema, prefix)
-        df = df.select(columns)
+        df = df.select(*columns)
         
         for field in df.schema.fields:
             name = field.name
