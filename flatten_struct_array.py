@@ -44,7 +44,8 @@ nested_df.show(truncate=False)
 nested_df.printSchema()
 
 
-from pyspark.sql.functions import col, explode, flatten, struct
+from pyspark.sql.functions import col, explode
+from pyspark.sql import DataFrame
 
 def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_') -> DataFrame:
     """
@@ -58,47 +59,29 @@ def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_'
     Returns:
         DataFrame: Flattened DataFrame.
     """
-    def flatten_schema(schema, prefix=None):
-        fields = []
-        for field in schema.fields:
+    stack = [(df, None)]
+    flattened_cols = []
+
+    while stack:
+        current_df, prefix = stack.pop()
+        for field in current_df.schema.fields:
             name = field.name
             dtype = field.dataType
-            new_name = f"{prefix}{separator}{name}" if prefix else name
+            full_name = f"{prefix}{separator}{name}" if prefix else name
 
             if isinstance(dtype, StructType):
-                fields += flatten_schema(dtype, new_name)
+                nested_cols = [col(f"{name}.{nested_field.name}") for nested_field in dtype.fields]
+                for nested_col in nested_cols:
+                    nested_name = nested_col._jc.toString().split('`')[1]
+                    stack.append((current_df.select(col("*"), nested_col.alias(f"{full_name}{separator}{nested_name}")), full_name))
             elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                fields.append(col(f"{prefix}.{name}" if prefix else name).alias(new_name))
-                fields.append(explode(col(f"{prefix}.{name}" if prefix else name)).alias(f"{new_name}_exploded"))
+                array_col_name = f"{prefix}.{name}" if prefix else name
+                exploded_df = current_df.withColumn(array_col_name, explode(col(array_col_name)))
+                stack.append((exploded_df, full_name))
             else:
-                fields.append(col(f"{prefix}.{name}" if prefix else name).alias(new_name))
-        return fields
+                flattened_cols.append(col(f"{prefix}.{name}" if prefix else name).alias(full_name))
 
-    def flatten_df_iteratively(df):
-        stack = [(df, None)]
-        flattened_cols = []
-
-        while stack:
-            current_df, prefix = stack.pop()
-
-            for field in current_df.schema.fields:
-                name = field.name
-                dtype = field.dataType
-                full_name = f"{prefix}{separator}{name}" if prefix else name
-
-                if isinstance(dtype, StructType):
-                    nested_cols = [col(f"{full_name}.{nested_field.name}") for nested_field in dtype.fields]
-                    stack.append((current_df.select(col for col in current_df.columns if col != name) + nested_cols, full_name))
-                elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                    array_col_name = f"{prefix}.{name}" if prefix else name
-                    exploded_df = current_df.withColumn(array_col_name, explode(col(array_col_name)))
-                    stack.append((exploded_df, full_name))
-                else:
-                    flattened_cols.append(col(f"{prefix}.{name}" if prefix else name).alias(full_name))
-
-        return df.select(flattened_cols)
-
-    return flatten_df_iteratively(df)
+    return df.select(flattened_cols)
 
 # Example usage:
 flattened_df = flatten_df(nested_df, include_parents=True, separator='_')
