@@ -1,4 +1,50 @@
-from pyspark.sql.functions import col, explode, lit
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("FlattenNestedDF").getOrCreate()
+
+# Define schema with multiple nested levels
+schema = StructType([
+    StructField("name", StringType(), True),
+    StructField("age", IntegerType(), True),
+    StructField("address", StructType([
+        StructField("city", StringType(), True),
+        StructField("state", StringType(), True),
+        StructField("zip", StringType(), True)
+    ]), True),
+    StructField("contacts", ArrayType(StructType([
+        StructField("type", StringType(), True),
+        StructField("detail", StringType(), True)
+    ])), True),
+    StructField("job", StructType([
+        StructField("title", StringType(), True),
+        StructField("department", StructType([
+            StructField("name", StringType(), True),
+            StructField("location", StringType(), True)
+        ]), True)
+    ]), True)
+])
+
+# Create sample data
+data = [
+    ("John Doe", 30, ("San Francisco", "CA", "94107"), 
+     [("email", "john.doe@example.com"), ("phone", "123-456-7890")], 
+     ("Software Engineer", ("Engineering", "Building 1"))),
+    ("Jane Smith", 25, ("New York", "NY", "10001"), 
+     [("email", "jane.smith@example.com")], 
+     ("Data Scientist", ("Data", "Building 2")))
+]
+
+# Create DataFrame
+nested_df = spark.createDataFrame(data, schema)
+
+# Show the DataFrame
+nested_df.show(truncate=False)
+nested_df.printSchema()
+
+
+from pyspark.sql.functions import col, explode, flatten, struct
 
 def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_') -> DataFrame:
     """
@@ -42,8 +88,7 @@ def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_'
 
                 if isinstance(dtype, StructType):
                     nested_cols = [col(f"{full_name}.{nested_field.name}") for nested_field in dtype.fields]
-                    current_df = current_df.select(nested_cols + [col for col in current_df.columns if col not in nested_cols])
-                    stack.append((current_df, full_name))
+                    stack.append((current_df.select(col for col in current_df.columns if col != name) + nested_cols, full_name))
                 elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
                     array_col_name = f"{prefix}.{name}" if prefix else name
                     exploded_df = current_df.withColumn(array_col_name, explode(col(array_col_name)))
