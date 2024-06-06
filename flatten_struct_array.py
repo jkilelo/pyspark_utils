@@ -1,5 +1,5 @@
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, explode, lit
+from pyspark.sql.functions import col, explode
 from pyspark.sql.types import StructType, ArrayType
 
 def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_') -> DataFrame:
@@ -14,40 +14,25 @@ def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_'
     Returns:
         DataFrame: Flattened DataFrame.
     """
-    def flatten(schema, prefix=None):
-        fields = []
-        for field in schema.fields:
+    stack = [(df, None)]  # Stack to keep track of DataFrame and prefix
+    flattened_cols = []
+
+    while stack:
+        current_df, prefix = stack.pop()
+        for field in current_df.schema.fields:
             name = field.name
             dtype = field.dataType
-            new_name = f"{prefix}{separator}{name}" if prefix else name
+            full_name = f"{prefix}{separator}{name}" if prefix else name
 
             if isinstance(dtype, StructType):
-                fields += flatten(dtype, prefix=new_name)
+                stack.append((current_df.select(col(f"{prefix}.{name}" if prefix else name + ".*")), full_name))
             elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                fields.append(col(f"{prefix}.{name}" if prefix else name).alias(new_name))
-                fields.append(explode(col(f"{prefix}.{name}" if prefix else name)).alias(f"{new_name}_exploded"))
+                array_col_name = f"{prefix}.{name}" if prefix else name
+                stack.append((current_df.withColumn(array_col_name, explode(col(array_col_name))), full_name))
             else:
-                fields.append(col(f"{prefix}.{name}" if prefix else name).alias(new_name))
-        return fields
+                flattened_cols.append(col(f"{prefix}.{name}" if prefix else name).alias(full_name))
 
-    def flatten_df_recursively(df, prefix=None):
-        schema = df.schema
-        columns = flatten(schema, prefix)
-        df = df.select(*columns)
-        
-        for field in df.schema.fields:
-            name = field.name
-            dtype = field.dataType
-            if isinstance(dtype, StructType):
-                df = df.withColumn(name, col(name))
-                df = flatten_df_recursively(df, prefix=name)
-            elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                df = df.withColumn(name, explode(col(name)))
-                df = flatten_df_recursively(df, prefix=name)
-                
-        return df
-
-    return flatten_df_recursively(df)
+    return df.select(flattened_cols)
 
 # Example usage:
 # flattened_df = flatten_df(nested_df, include_parents=True, separator='_')
