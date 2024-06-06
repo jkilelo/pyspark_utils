@@ -42,55 +42,61 @@ nested_df = spark.createDataFrame(data, schema)
 # Show the DataFrame
 nested_df.show(truncate=False)
 nested_df.printSchema()
-
-from pyspark.sql.functions import col, explode
 from pyspark.sql import DataFrame
+from pyspark.sql.functions import col, explode_outer, array
 from pyspark.sql.types import StructType, ArrayType
 
-def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_') -> DataFrame:
+def flatten_dataframe(df: DataFrame, include_parents: bool = True, separator: str = "_") -> DataFrame:
     """
-    Flattens a nested DataFrame, including any nested structs or arrays.
-    
+    Flattens nested structs and arrays within a PySpark DataFrame.
+
     Args:
-        df (DataFrame): Input DataFrame to flatten.
-        include_parents (bool): Whether to include parent names in the flattened keys.
-        separator (str): Custom key name separator to avoid key collision.
-        
+        df: The input DataFrame to flatten.
+        include_parents: If True, include parent names in the flattened column names.
+        separator: The character used to separate parent and child names.
+
     Returns:
-        DataFrame: Flattened DataFrame.
+        The flattened DataFrame.
     """
-    def flatten(schema, prefix=None):
-        fields = []
-        for field in schema.fields:
-            name = field.name
-            dtype = field.dataType
-            new_name = f"{prefix}{separator}{name}" if prefix else name
+    # Initialize a stack to track columns to process
+    stack = [(df, [])]
 
-            if isinstance(dtype, StructType):
-                fields += flatten(dtype, new_name)
-            elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                fields.append((f"{new_name}", col(f"{prefix}.{name}" if prefix else name)))
-                fields.append((f"{new_name}_exploded", explode(col(f"{prefix}.{name}" if prefix else name))))
+    while stack:
+        df, parents = stack.pop()
+
+        for field in df.schema.fields:
+            field_name = field.name
+            field_type = field.dataType
+
+            # Base Case 1: if the field is a primitive data type, then do nothing.
+            if not isinstance(field_type, (StructType, ArrayType)):
+                continue
+
+            # Base Case 2: if the field is an array but its element type is primitive, then explode it directly.
+            elif isinstance(field_type, ArrayType) and not isinstance(field_type.elementType, (StructType, ArrayType)):
+                df = df.withColumn(field_name, explode_outer(col(field_name)))
+
+            # Recursive Case 1: if the field is an array of structs, we first explode it.
+            elif isinstance(field_type, ArrayType):
+                # Explode the field as it is an array and continue further.
+                df = df.withColumn(field_name, explode_outer(col(field_name)))
+
+            # Recursive Case 2: if the field is a struct, we push it into stack along with its parent.
             else:
-                fields.append((new_name, col(f"{prefix}.{name}" if prefix else name)))
-        return fields
+                # Push the struct field to the stack along with its parents for later processing
+                stack.append((df.select(field_name + ".*"), parents + [field_name]))
 
-    flattened_fields = flatten(df.schema)
+        # If include_parents flag is true then we flatten the dataframe by joining parent and children names.
+        if include_parents:
+            flattened_cols = [
+                col(".".join(parents + [c.name])).alias(separator.join(parents + [c.name]))
+                for c in df.schema.fields
+            ]
+        else:
+            # Otherwise, just use the children names
+            flattened_cols = [col(c.name) for c in df.schema.fields]
 
-    select_expr = [field.alias(alias) for alias, field in flattened_fields]
-    flat_df = df.select(*select_expr)
+        # Select flattened columns from current dataframe
+        df = df.select(*flattened_cols)
 
-    for alias, field in flattened_fields:
-        if "_exploded" in alias:
-            exploded_alias = alias.replace("_exploded", "")
-            nested_cols = flat_df.schema[alias].dataType.elementType
-            nested_select = [col(f"{alias}.{nested_col.name}").alias(f"{exploded_alias}{separator}{nested_col.name}")
-                             for nested_col in nested_cols.fields]
-            flat_df = flat_df.select("*", *nested_select).drop(alias)
-
-    return flat_df
-
-# Example usage:
-flattened_df = flatten_df(nested_df, include_parents=True, separator='_')
-flattened_df.show(truncate=False)
-flattened_df.printSchema()
+    return df
