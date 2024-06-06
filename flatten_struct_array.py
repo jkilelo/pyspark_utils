@@ -43,9 +43,9 @@ nested_df = spark.createDataFrame(data, schema)
 nested_df.show(truncate=False)
 nested_df.printSchema()
 
-
 from pyspark.sql.functions import col, explode
 from pyspark.sql import DataFrame
+from pyspark.sql.types import StructType, ArrayType
 
 def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_') -> DataFrame:
     """
@@ -59,29 +59,36 @@ def flatten_df(df: DataFrame, include_parents: bool = True, separator: str = '_'
     Returns:
         DataFrame: Flattened DataFrame.
     """
-    stack = [(df, None)]
-    flattened_cols = []
-
-    while stack:
-        current_df, prefix = stack.pop()
-        for field in current_df.schema.fields:
+    def flatten(schema, prefix=None):
+        fields = []
+        for field in schema.fields:
             name = field.name
             dtype = field.dataType
-            full_name = f"{prefix}{separator}{name}" if prefix else name
+            new_name = f"{prefix}{separator}{name}" if prefix else name
 
             if isinstance(dtype, StructType):
-                nested_cols = [col(f"{name}.{nested_field.name}") for nested_field in dtype.fields]
-                for nested_col in nested_cols:
-                    nested_name = nested_col._jc.toString().split('`')[1]
-                    stack.append((current_df.select(col("*"), nested_col.alias(f"{full_name}{separator}{nested_name}")), full_name))
+                fields += flatten(dtype, new_name)
             elif isinstance(dtype, ArrayType) and isinstance(dtype.elementType, StructType):
-                array_col_name = f"{prefix}.{name}" if prefix else name
-                exploded_df = current_df.withColumn(array_col_name, explode(col(array_col_name)))
-                stack.append((exploded_df, full_name))
+                fields.append((f"{new_name}", col(f"{prefix}.{name}" if prefix else name)))
+                fields.append((f"{new_name}_exploded", explode(col(f"{prefix}.{name}" if prefix else name))))
             else:
-                flattened_cols.append(col(f"{prefix}.{name}" if prefix else name).alias(full_name))
+                fields.append((new_name, col(f"{prefix}.{name}" if prefix else name)))
+        return fields
 
-    return df.select(flattened_cols)
+    flattened_fields = flatten(df.schema)
+
+    select_expr = [field.alias(alias) for alias, field in flattened_fields]
+    flat_df = df.select(*select_expr)
+
+    for alias, field in flattened_fields:
+        if "_exploded" in alias:
+            exploded_alias = alias.replace("_exploded", "")
+            nested_cols = flat_df.schema[alias].dataType.elementType
+            nested_select = [col(f"{alias}.{nested_col.name}").alias(f"{exploded_alias}{separator}{nested_col.name}")
+                             for nested_col in nested_cols.fields]
+            flat_df = flat_df.select("*", *nested_select).drop(alias)
+
+    return flat_df
 
 # Example usage:
 flattened_df = flatten_df(nested_df, include_parents=True, separator='_')
