@@ -1,102 +1,59 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType
-
-# Initialize Spark session
-spark = SparkSession.builder.appName("FlattenNestedDF").getOrCreate()
-
-# Define schema with multiple nested levels
-schema = StructType([
-    StructField("name", StringType(), True),
-    StructField("age", IntegerType(), True),
-    StructField("address", StructType([
-        StructField("city", StringType(), True),
-        StructField("state", StringType(), True),
-        StructField("zip", StringType(), True)
-    ]), True),
-    StructField("contacts", ArrayType(StructType([
-        StructField("type", StringType(), True),
-        StructField("detail", StringType(), True)
-    ])), True),
-    StructField("job", StructType([
-        StructField("title", StringType(), True),
-        StructField("department", StructType([
-            StructField("name", StringType(), True),
-            StructField("location", StringType(), True)
-        ]), True)
-    ]), True)
-])
-
-# Create sample data
-data = [
-    ("John Doe", 30, ("San Francisco", "CA", "94107"), 
-     [("email", "john.doe@example.com"), ("phone", "123-456-7890")], 
-     ("Software Engineer", ("Engineering", "Building 1"))),
-    ("Jane Smith", 25, ("New York", "NY", "10001"), 
-     [("email", "jane.smith@example.com")], 
-     ("Data Scientist", ("Data", "Building 2")))
-]
-
-# Create DataFrame
-nested_df = spark.createDataFrame(data, schema)
-
-# Show the DataFrame
-nested_df.show(truncate=False)
-nested_df.printSchema()
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, explode_outer, array
-from pyspark.sql.types import StructType, ArrayType
+from pyspark.sql.functions import col, size
+from pyspark.sql.types import ArrayType, StructType
 
-def flatten_dataframe(df: DataFrame, include_parents: bool = True, separator: str = "_") -> DataFrame:
-    """
-    Flattens nested structs and arrays within a PySpark DataFrame.
+class NestedDF:
+    """A class for flattening nested dataframes in PySpark."""
 
-    Args:
-        df: The input DataFrame to flatten.
-        include_parents: If True, include parent names in the flattened column names.
-        separator: The character used to separate parent and child names.
+    def __init__(self, nested_df: DataFrame, separator: str = '_', include_parents: bool = True):
+        """
+        Args:
+            nested_df (pyspark.sql.dataframe.DataFrame): Nested dataframe.
+            separator (str): Separator to use in flattened column names.
+            include_parents (bool): Whether to include parent column names in the flattened column names.
+        """
+        self.nested_df = nested_df
+        self.separator = separator
+        self.include_parents = include_parents
+        self.flattened_struct_df = self.flatten_struct_df()
+        self.flattened_df = self.flatten_array_df()
 
-    Returns:
-        The flattened DataFrame.
-    """
-    # Initialize a stack to track columns to process
-    stack = [(df, [])]
+    def flatten_array_df(self) -> DataFrame:
+        """Flatten a nested array dataframe into a single level dataframe.
 
-    while stack:
-        df, parents = stack.pop()
+        Returns:
+            pyspark.sql.dataframe.DataFrame: Flattened dataframe.
+        """
+        cols = self.flattened_struct_df.columns
+        for col_name in cols:
+            if isinstance(self.flattened_struct_df.schema[col_name].dataType, ArrayType):
+                array_len = self.flattened_struct_df.select(size(col(col_name)).alias("array_len")).collect()[0]["array_len"]
+                for i in range(array_len):
+                    self.flattened_struct_df = self.flattened_struct_df.withColumn(f"{col_name}{self.separator}{i}", self.flattened_struct_df[col_name].getItem(i))
+                self.flattened_struct_df = self.flattened_struct_df.drop(col_name)
+        return self.flattened_struct_df
 
-        for field in df.schema.fields:
-            field_name = field.name
-            field_type = field.dataType
+    def flatten_struct_df(self) -> DataFrame:
+        """Flatten a nested dataframe into a single level dataframe.
 
-            # Base Case 1: if the field is a primitive data type, then do nothing.
-            if not isinstance(field_type, (StructType, ArrayType)):
-                continue
+        Returns:
+            pyspark.sql.dataframe.DataFrame: Flattened dataframe.
+        """
+        stack = [((), self.nested_df)]
+        columns = []
+        while stack:
+            parents, df = stack.pop()
+            for col_name, col_type in df.dtypes:
+                if col_type.startswith('struct'):
+                    new_parents = parents + (col_name,)
+                    stack.append((new_parents, df.select(f"{col_name}.*")))
+                else:
+                    new_col_name = self.separator.join(parents + (col_name,)) if self.include_parents else col_name
+                    columns.append(col(".".join(parents + (col_name,))).alias(new_col_name))
+        return self.nested_df.select(columns)
 
-            # Base Case 2: if the field is an array but its element type is primitive, then explode it directly.
-            elif isinstance(field_type, ArrayType) and not isinstance(field_type.elementType, (StructType, ArrayType)):
-                df = df.withColumn(field_name, explode_outer(col(field_name)))
-
-            # Recursive Case 1: if the field is an array of structs, we first explode it.
-            elif isinstance(field_type, ArrayType):
-                # Explode the field as it is an array and continue further.
-                df = df.withColumn(field_name, explode_outer(col(field_name)))
-
-            # Recursive Case 2: if the field is a struct, we push it into stack along with its parent.
-            else:
-                # Push the struct field to the stack along with its parents for later processing
-                stack.append((df.select(field_name + ".*"), parents + [field_name]))
-
-        # If include_parents flag is true then we flatten the dataframe by joining parent and children names.
-        if include_parents:
-            flattened_cols = [
-                col(".".join(parents + [c.name])).alias(separator.join(parents + [c.name]))
-                for c in df.schema.fields
-            ]
-        else:
-            # Otherwise, just use the children names
-            flattened_cols = [col(c.name) for c in df.schema.fields]
-
-        # Select flattened columns from current dataframe
-        df = df.select(*flattened_cols)
-
-    return df
+# Example usage
+df_to_flatten = NestedDF(nested_df, separator='_', include_parents=False)
+flattened_df = df_to_flatten.flattened_df
+flattened_df.show(truncate=False)
+flattened_df.printSchema()
