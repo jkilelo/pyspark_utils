@@ -1,0 +1,76 @@
+'''
+### Mainframe Copybook Data Types and Corresponding Hive Data Types
+
+1. **Alphanumeric (PIC X(n))**
+   - **Mainframe:** PIC X(n)
+   - **Hive:** STRING
+
+2. **Numeric (Packed Decimal - COMP-3)**
+   - **Mainframe:** PIC 9(n)V9(m) COMP-3
+   - **Hive:** DECIMAL(precision, scale)
+
+3. **Numeric (Binary - COMP)**
+   - **Mainframe:** PIC 9(n) COMP
+   - **Hive:** INT/BIGINT (depending on the length)
+
+4. **Numeric (Binary - COMP-4)**
+   - **Mainframe:** PIC 9(n) COMP-4
+   - **Hive:** INT/BIGINT (depending on the length)
+
+5. **Numeric (Binary - COMP-5)**
+   - **Mainframe:** PIC 9(n) COMP-5
+   - **Hive:** INT/BIGINT (depending on the length)
+
+6. **Numeric (Display)**
+   - **Mainframe:** PIC 9(n)V9(m)
+   - **Hive:** DECIMAL(precision, scale)
+
+7. **Numeric (Floating Point - COMP-1)**
+   - **Mainframe:** COMP-1 (single-precision floating point)
+   - **Hive:** FLOAT
+
+8. **Numeric (Floating Point - COMP-2)**
+   - **Mainframe:** COMP-2 (double-precision floating point)
+   - **Hive:** DOUBLE
+
+9. **Signed Numeric (Display)**
+   - **Mainframe:** PIC S9(n)V9(m) 
+   - **Hive:** DECIMAL(precision, scale)
+
+10. **Signed Numeric (Packed Decimal - COMP-3)**
+    - **Mainframe:** PIC S9(n)V9(m) COMP-3
+    - **Hive:** DECIMAL(precision, scale)
+
+11. **Signed Numeric (Binary - COMP)**
+    - **Mainframe:** PIC S9(n) COMP
+    - **Hive:** INT/BIGINT (depending on the length)
+
+12. **Signed Numeric (Binary - COMP-4)**
+    - **Mainframe:** PIC S9(n) COMP-4
+    - **Hive:** INT/BIGINT (depending on the length)
+
+13. **Signed Numeric (Binary - COMP-5)**
+    - **Mainframe:** PIC S9(n) COMP-5
+    - **Hive:** INT/BIGINT (depending on the length)
+
+14. **Unsigned Numeric (Display)**
+    - **Mainframe:** PIC 9(n)
+    - **Hive:** INT/BIGINT/DECIMAL (depending on the length and precision required)
+
+
+
+### Key Notes
+
+- **STRING**: Used for alphanumeric data (PIC X(n)).
+- **DECIMAL(precision, scale)**: Used for numeric data with a specified number of digits and decimal places.
+- **INT/BIGINT**: Used for numeric data, with INT for shorter lengths and BIGINT for longer lengths.
+- **FLOAT/DOUBLE**: Used for floating-point numbers.
+
+### Additional Considerations
+
+- **Handling Null Values:** Mainframe systems often use special values to indicate nulls. These should be appropriately mapped to NULL in Hive.
+- **Field Lengths:** Ensure that the lengths of fields in Hive match those in the mainframe copybooks.
+- **Data Formatting:** Be aware of any specific formatting requirements or conversions needed between EBCDIC (mainframe) and ASCII (Hive).
+
+This mapping should help facilitate the transition of data from mainframe environments to Hive, ensuring data integrity and type compatibility. If you have specific fields or examples from your copybooks, providing those could help refine the mapping further.
+'''
