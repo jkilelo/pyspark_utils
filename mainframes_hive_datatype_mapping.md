@@ -1,4 +1,3 @@
-'''
 ### Mainframe Copybook Data Types and Corresponding Hive Data Types
 
 1. **Alphanumeric (PIC X(n))**
@@ -71,6 +70,3 @@
 - **Handling Null Values:** Mainframe systems often use special values to indicate nulls. These should be appropriately mapped to NULL in Hive.
 - **Field Lengths:** Ensure that the lengths of fields in Hive match those in the mainframe copybooks.
 - **Data Formatting:** Be aware of any specific formatting requirements or conversions needed between EBCDIC (mainframe) and ASCII (Hive).
-
-This mapping should help facilitate the transition of data from mainframe environments to Hive, ensuring data integrity and type compatibility. If you have specific fields or examples from your copybooks, providing those could help refine the mapping further.
-'''
