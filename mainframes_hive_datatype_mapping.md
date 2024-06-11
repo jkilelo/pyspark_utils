@@ -71,7 +71,7 @@
 - **Field Lengths:** Ensure that the lengths of fields in Hive match those in the mainframe copybooks.
 - **Data Formatting:** Be aware of any specific formatting requirements or conversions needed between EBCDIC (mainframe) and ASCII (Hive).
 
-`
+```
 - Copybook
        01  TEST-DATA.
            05  ALPHANUMERIC-FIELD          PIC X(10).
@@ -124,4 +124,4 @@ CREATE TABLE test_data (
 )
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY '\n';
-`
+```
