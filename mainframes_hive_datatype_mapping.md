@@ -70,3 +70,58 @@
 - **Handling Null Values:** Mainframe systems often use special values to indicate nulls. These should be appropriately mapped to NULL in Hive.
 - **Field Lengths:** Ensure that the lengths of fields in Hive match those in the mainframe copybooks.
 - **Data Formatting:** Be aware of any specific formatting requirements or conversions needed between EBCDIC (mainframe) and ASCII (Hive).
+
+`
+- Copybook
+       01  TEST-DATA.
+           05  ALPHANUMERIC-FIELD          PIC X(10).
+           05  PACKED-DECIMAL-FIELD        PIC 9(5)V9(2) COMP-3.
+           05  BINARY-FIELD                PIC 9(5) COMP.
+           05  BINARY-FIELD-COMP4          PIC 9(5) COMP-4.
+           05  BINARY-FIELD-COMP5          PIC 9(5) COMP-5.
+           05  DISPLAY-NUMERIC-FIELD       PIC 9(5)V9(2).
+           05  FLOAT-FIELD                 COMP-1.
+           05  DOUBLE-FIELD                COMP-2.
+           05  SIGNED-DISPLAY-FIELD        PIC S9(5)V9(2).
+           05  SIGNED-PACKED-DECIMAL       PIC S9(5)V9(2) COMP-3.
+           05  SIGNED-BINARY-FIELD         PIC S9(5) COMP.
+           05  SIGNED-BINARY-FIELD-COMP4   PIC S9(5) COMP-4.
+           05  SIGNED-BINARY-FIELD-COMP5   PIC S9(5) COMP-5.
+           05  UNSIGNED-DISPLAY-FIELD      PIC 9(10).
+
+- Data
+ALPHA12345
++1234500
+00012345
+00012345
+00012345
+0001234500
+4.567
+1234567890.1234
+-1234500
+-1234500
+-12345
+-12345
+-12345
+1234567890
+
+- DDL
+CREATE TABLE test_data (
+  alphanumeric_field STRING,
+  packed_decimal_field DECIMAL(7,2),
+  binary_field INT,
+  binary_field_comp4 INT,
+  binary_field_comp5 INT,
+  display_numeric_field DECIMAL(7,2),
+  float_field FLOAT,
+  double_field DOUBLE,
+  signed_display_field DECIMAL(7,2),
+  signed_packed_decimal DECIMAL(7,2),
+  signed_binary_field INT,
+  signed_binary_field_comp4 INT,
+  signed_binary_field_comp5 INT,
+  unsigned_display_field BIGINT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\n';
+`
