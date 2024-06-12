@@ -88,7 +88,8 @@ def flatten_json(data, key_separator=".", include_long_form=True, array_handling
             elif isinstance(current, Iterable) and not isinstance(current, str):
                 if array_handling == "index":
                     for i, item in enumerate(current):
-                        local_stack.append((item, f"{prefix}{key_separator}{i}", depth + 1))
+                        new_key = f"{prefix}{key_separator}{i}" if prefix else str(i)
+                        local_stack.append((item, new_key, depth + 1))
                 elif array_handling == "concatenate":
                     local_flattened[prefix] = ", ".join(map(str, current))
                 elif array_handling == "ignore":
