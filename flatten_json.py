@@ -4,6 +4,7 @@ import xlsxwriter
 import logging
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
+from collections.abc import Iterable
 from .utils import validate_schema, write_csv, write_xlsx
 
 logging.basicConfig(level=logging.DEBUG)
@@ -12,34 +13,6 @@ class FlattenJSONError(Exception):
     pass
 
 def flatten_json(data, key_separator=".", include_long_form=True, array_handling="index", handle_collision="suffix", custom_handlers=None, config_file=None, error_handler=None, max_depth=None, sort_keys=False, key_filter=None, value_transform=None, parallel=False, output_format=None, delimiter=",", schema=None, array_transform=None):
-    """Flattens a nested JSON object or array into a single-level dictionary with various enhancements.
-
-    Args:
-        data: The JSON object or array to flatten.
-        key_separator: The separator to use between nested keys (default ".").
-        include_long_form: Whether to include long-form keys (e.g., "parent.child") in the output (default True).
-        array_handling: How to handle arrays: "index" (add indices to keys), "concatenate" (join values), or "ignore" (default "index").
-        handle_collision: Strategy to handle key collisions: "suffix" (append "_duplicate"), "counter" (append numeric counter), "error" (raise error).
-        custom_handlers: Custom handlers for specific data types.
-        config_file: Path to a JSON configuration file.
-        error_handler: Custom error handler function.
-        max_depth: Maximum depth for nesting (default None).
-        sort_keys: Sort the keys in the output dictionary (default False).
-        key_filter: List of keys to include or exclude.
-        value_transform: Function to transform values before adding to the flattened dictionary.
-        parallel: Use parallel processing for large JSON objects (default False).
-        output_format: Output format for the flattened data (None, "csv", "xlsx").
-        delimiter: Delimiter for CSV output (default ",").
-        schema: Schema to validate the flattened output.
-        array_transform: Function to transform arrays before or after flattening.
-
-    Returns:
-        A flattened dictionary representation of the input data.
-
-    Raises:
-        FlattenJSONError: If an error occurs during flattening.
-    """
-
     if config_file:
         try:
             with open(config_file, 'r') as file:
@@ -58,8 +31,8 @@ def flatten_json(data, key_separator=".", include_long_form=True, array_handling
             else:
                 raise FlattenJSONError(f"Error reading config file: {e}")
 
-    if not isinstance(data, (dict, list)):
-        raise FlattenJSONError("Input data must be a dictionary or list")
+    if not isinstance(data, (dict, list, tuple, set)):
+        raise FlattenJSONError("Input data must be a dictionary or an iterable (list, tuple, set)")
 
     flattened = {}
     stack = [(data, "", 0)]
@@ -94,7 +67,6 @@ def flatten_json(data, key_separator=".", include_long_form=True, array_handling
                 for key, value in current.items():
                     new_key = f"{prefix}{key_separator}{key}" if prefix else key
                     
-                    # Handle key collisions
                     if new_key in local_flattened:
                         if handle_collision == "suffix":
                             while new_key in local_flattened:
@@ -113,7 +85,7 @@ def flatten_json(data, key_separator=".", include_long_form=True, array_handling
 
                     local_stack.append((value, new_key, depth + 1))
 
-            elif isinstance(current, list):
+            elif isinstance(current, Iterable) and not isinstance(current, str):
                 if array_handling == "index":
                     for i, item in enumerate(current):
                         local_stack.append((item, f"{prefix}{key_separator}{i}", depth + 1))
@@ -122,11 +94,9 @@ def flatten_json(data, key_separator=".", include_long_form=True, array_handling
                 elif array_handling == "ignore":
                     continue
             else:
-                # Custom handlers
                 if custom_handlers and type(current) in custom_handlers:
                     current = custom_handlers[type(current)](current)
 
-                # Value transformation
                 if value_transform:
                     current = value_transform(current)
 
