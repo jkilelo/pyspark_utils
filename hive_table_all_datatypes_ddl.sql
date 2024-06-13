@@ -20,3 +20,7 @@ CREATE TABLE IF NOT EXISTS all_data_types (
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
 STORED AS TEXTFILE;
+
+Data
+120,32000,1234567890,-9223372036854775800,true,3.14159,2.71828,"This is a string","Sample varchar text","Char value",2024-06-13 10:30:00,2023-12-25,12345.67,01010100,["apple","banana","cherry"],{"key1":10,"key2":25},{"name":"Alice","age":30}
+-100,-15000,-543210987,9223372036854775807,false,-10.5,0.618,"Another string here","More varchar","Char#2",2022-01-01 00:00:00,2024-06-13,8765.43,10101011,["red","green","blue"],{"key3":5,"key4":12},{"name":"Bob","age":45}
