@@ -1,5 +1,6 @@
 import subprocess
 import re
+from pyspark.sql import SparkSession
 
 def is_table_partitioned(beeline_url, db_name, table_name):
     """
@@ -31,11 +32,11 @@ def is_table_partitioned(beeline_url, db_name, table_name):
         return None
 
 
-from pyspark.sql import SparkSession
 
-def is_table_partitioned_pyspark(db_name, table_name):
+
+def is_table_partitioned_sql(db_name, table_name):
     """
-    Checks if a Hive table is partitioned using PySpark.
+    Checks if a Hive table is partitioned using a direct SQL query.
 
     Args:
         db_name: The name of the database containing the table.
@@ -44,9 +45,12 @@ def is_table_partitioned_pyspark(db_name, table_name):
     Returns:
         True if the table is partitioned, False otherwise.
     """
-
     spark = SparkSession.builder.getOrCreate()
-    table = spark.catalog.getTable(f"{db_name}.{table_name}")
-    
-    # Check if the table has any partition columns defined in its schema
-    return len(table.partitionColumnNames) > 0
+
+    # Execute a SQL query to check for partition information
+    query = f"SHOW PARTITIONS {db_name}.{table_name};"
+    result = spark.sql(query)
+
+    # If there are any rows in the result, the table is partitioned
+    return result.count() > 0 
+
